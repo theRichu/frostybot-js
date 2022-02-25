@@ -1,0 +1,55 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © therichu
+
+//@version=5
+strategy(title="Close entries rule - example", overlay=true, close_entries_rule="ANY")
+
+// 날짜 제한
+// Make input options that configure backtest date range
+startYear = input.int(title="Start Year", defval=2018, minval=1800, maxval=2100, group="Date Limits")
+startMonth = input.int(title="Start Month",defval=1, minval=1, maxval=12, group="Date Limits")
+startDate = input.int(title="Start Date", defval=1, minval=1, maxval=31, group="Date Limits")
+startHour = input.int(title="Start Hour", defval=0, minval=0, maxval=23, group="Date Limits")
+startMinute = input.int(title="Start Minute", defval=0, minval=0, maxval=59, group="Date Limits")
+
+endYear = input.int(title="End Year", defval=2019, minval=1800, maxval=2100, group="Date Limits")
+endMonth = input.int(title="End Month", defval=7, minval=1, maxval=12, group="Date Limits")
+endDate = input.int(title="End Date", defval=1, minval=1, maxval=31, group="Date Limits")
+
+inDateRange = (time >= timestamp(syminfo.timezone, startYear, startMonth, startDate, startHour, startMinute)) and (time < timestamp(syminfo.timezone, endYear, endMonth, endDate, 0, 0))
+
+
+
+
+additional_cmd        = ",\"botType\":\"ANN\", \"maxsize\":\"" + str.tostring(strategy.equity * 0.125 * 20 / close[0]) + "\"" + ",\"basecurrency\":\"" + syminfo.basecurrency + "\"" + ",\"currency\":\"" + syminfo.currency + "\""
+
+
+// (1)LONG -> (2)SHORT -> (3)SHORT_CLOSE -> (4)LONG -> (5)LONG CLOSE 
+context = LONG
+
+plotchar(inDateRange, "inDateRange", "", location.top, size = size.tiny)
+plotchar(context, "context", "", location.top, size = size.tiny)
+// plotchar(strategy.position_size, "positionSize", "", location.top, size = size.tiny)
+// plotchar(strategy.opentrades, "opentrades", "", location.top, size = size.tiny)
+// plotchar(strategy.equity, "equity", "", location.top, size = size.tiny)
+
+// plotchar(strategy.equity * 0.125 * 20 / close[0], "maxsize", "", location.top, size = size.tiny)
+
+if(inDateRange)
+    context = switch context[1]
+        "1" => "2"
+        "2" => "3"
+        "3" => "4"
+        "4" => "5"
+        "5" => "1"
+        =>
+            runtime.error("No CONTEXT")
+            na
+    
+    switch context
+        "1" => strategy.entry("Long", strategy.long, alert_message=additional_cmd, comment="1")
+        "2" => strategy.entry("Short", strategy.short, alert_message=additional_cmd, comment="2")
+        "3" => strategy.close("Short", comment="SL",  alert_message=additional_cmd, comment="3")
+        "4" => strategy.entry("Long", strategy.long, alert_message=additional_cmd, comment="4")
+        "5" => strategy.close("Long", comment="SL",  alert_message=additional_cmd, comment="5")
+

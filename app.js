@@ -93,8 +93,6 @@ app.post('/webhook', async function (req, res) {
   try {
     if (!req.rawBody) {
       const axios = require('axios')
-      console.log('webhook', req.body)
-
       let command = ''
       let cmd = ''
       let maxsize
@@ -102,20 +100,39 @@ app.post('/webhook', async function (req, res) {
       let base
       let stub = req.body.stub
 
-      if (req.body.action === 'buy') {
-        cmd = 'trade:' + req.body.stub + ':' + req.body.market_position + ' symbol=' + req.body.basecurrency + '/' + req.body.currency + ' maxsize=' + req.body.maxsize + ' base=+' + req.body.contracts
-        command = 'trade:' + req.body.market_position
-        symbol = req.body.basecurrency + '/' + req.body.currency
-        maxsize = req.body.maxsize
-        base = '+' + req.body.contracts
-      } else if (req.body.action === 'sell') {
-        // 'frostybot trade:binance_future:close symbol=ETH/USDT base='
+      console.log('webhook', req.body)
 
-        cmd = 'trade:' + req.body.stub + ':close symbol=' + req.body.basecurrency + '/' + req.body.currency + ' base=' + req.body.contracts
+      if (body.botType === 'ANN') {
+        if (body.market_position === 'long' || body.market_position === 'short') {
+          cmd = 'trade:' + body.stub + ':' + body.market_position + ' symbol=' + body.basecurrency + '/' + body.currency + ' maxsize=' + body.maxsize + ' base=' + body.market_position_size
+          command = 'trade:' + body.market_position
+          symbol = body.basecurrency + '/' + body.currency
+          maxsize = body.maxsize
+          base = body.market_position_size
+        } else {
+          cmd = 'trade:' + body.stub + ':close symbol=' + body.basecurrency + '/' + body.currency + ' base=' + body.contracts
 
-        command = 'trade:close'
-        symbol = req.body.basecurrency + '/' + req.body.currency
-        base = req.body.contracts
+          command = 'trade:close'
+          symbol = body.basecurrency + '/' + body.currency
+          base = body.market_position_size
+        }
+      } else {
+        // 기존봇
+        if (req.body.action === 'buy') {
+          cmd = 'trade:' + req.body.stub + ':' + req.body.market_position + ' symbol=' + req.body.basecurrency + '/' + req.body.currency + ' maxsize=' + req.body.maxsize + ' base=+' + req.body.contracts
+          command = 'trade:' + req.body.market_position
+          symbol = req.body.basecurrency + '/' + req.body.currency
+          maxsize = req.body.maxsize
+          base = '+' + req.body.contracts
+        } else if (req.body.action === 'sell') {
+          // 'frostybot trade:binance_future:close symbol=ETH/USDT base='
+
+          cmd = 'trade:' + req.body.stub + ':close symbol=' + req.body.basecurrency + '/' + req.body.currency + ' base=' + req.body.contracts
+
+          command = 'trade:close'
+          symbol = req.body.basecurrency + '/' + req.body.currency
+          base = req.body.contracts
+        }
       }
 
       if (cmd) {
