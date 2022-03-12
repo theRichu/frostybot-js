@@ -1,0 +1,91 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Dicargo_Beam
+
+//@version=5
+strategy("Volatility Breakout Strategy", overlay=true, default_qty_type= strategy.percent_of_equity, default_qty_value=100,process_orders_on_close=false)
+
+k = input.float(0.6,"k : constant that determines the entry price")
+sh = input.bool(false,"Short Position Open??")
+iner = input.bool(false,"Apply the previous inertia?")
+
+[o,h,l,c] = request.security(syminfo.tickerid,"D",[open,high,low,close])
+
+lp = 0.0
+
+lp := if hour==0 
+    math.log(c[1])+(math.log(h[1])-math.log(l[1]))*k
+else
+    lp[1]
+_lp = math.pow(2.718,lp)
+
+
+
+sl = 0.0
+sl := if hour == 0
+    (math.log(l[1])+lp)/2
+else
+    sl[1]
+_sl = math.pow(2.718,sl)    
+exit = hour==0 or  math.log(close) < sl
+
+sp = 0.0
+sp := if hour==0 
+    math.log(c[1])-(math.log(h[1])-math.log(l[1]))*k
+else
+    sp[1]
+_sp = math.pow(2.718,sp)
+
+
+sl2 = 0.0
+sl2 := if hour == 0
+    (math.log(h[1])+sp)/2
+else
+    sl2[1]
+_sl2 = math.pow(2.718,sl2)    
+exit2 = hour==0 or  math.log(close) > sl2
+
+
+longcond = _lp < high
+shortcond = _sp > low
+liner = iner? lp/sl > sl2/sp : true
+siner = iner? lp/sl < sl2/sp : true
+
+plot(_lp,"Long Entry",color=color.yellow)
+plot(_sl,"Long StopLoss",color=color.red)
+
+
+strategy.entry("Long", strategy.long,comment = "Long", when = longcond and strategy.opentrades == 0 and liner)
+strategy.close("Long", comment="Long Exit", when = exit)
+
+plot(sh?_sp:na,"Short Entry",color=color.new(color.yellow,50))
+plot(sh?_sl2:na,"Short StopLoss",color=color.new(color.red,50))
+
+if sh
+    strategy.entry("Short", strategy.short,comment = "Short", when = shortcond and strategy.opentrades == 0 and siner)
+    strategy.close("Short", comment="Short Exit", when = exit2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//
+var bg = 0
+bg := if hour == 0 and minute == 0
+    bg + 1
+else
+    bg[1]
+
+bgcolor(bg/2== math.floor(bg/2) ? color.new(color.blue,95):na)
+
+

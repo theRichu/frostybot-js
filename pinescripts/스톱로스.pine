@@ -1,0 +1,34 @@
+// STOP LOSS ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+// Input
+useLongStopLoss = input(true,  title="Use Long Stop Loss", group="STOPLOSS")
+longStopLossPercent = input.float(title="Long Stop Loss (%)", defval=1.5, minval=0, maxval=50, step=.1, group="STOPLOSS") / 100
+useShortStopLoss = input(true,  title="Use Short Stop Loss", group="STOPLOSS")
+shortStopLossPercent = input.float(title="Short Stop Loss (%)", defval=1.4, minval=0, maxval=50, step=.1, group="STOPLOSS") / 100
+
+// Logic
+TradeDir=strategy.position_size>0?"LONG":strategy.position_size<0?"SHORT":"HOLD"
+entryPrice=strategy.position_avg_price
+
+longStopLossPrice = entryPrice * (1 - longStopLossPercent)
+shortStopLossPrice = entryPrice * (1 + shortStopLossPercent)
+
+stopLossLimitPrice = TradeDir == "LONG"?longStopLossPrice:TradeDir=="SHORT"?shortStopLossPrice:na
+
+// Plotting
+var nowDangerBox = box.new(na, na, na, na, border_color=na, xloc=xloc.bar_index)
+moveDangerBox(_box) => 
+    box.set_right(_box, bar_index)
+    box.set_left(_box, strategy.opentrades.entry_bar_index(0))
+    box.set_top(_box, math.max( entryPrice, stopLossLimitPrice))
+    box.set_bottom(_box, math.min( entryPrice, stopLossLimitPrice))
+    box.set_extend(_box, extend=extend.right)
+    box.set_bgcolor(_box, color.new(color.fuchsia,90))
+
+moveDangerBox(nowDangerBox)
+plot(stopLossLimitPrice, color=color.new(TradeDir == "LONG"?color.blue:color.red,30), title="stopLossLimitPrice", style=plot.style_stepline)
+
+// Signal
+LSL = useLongStopLoss and TradeDir == "LONG" and (math.min(open,close,low) < longStopLossPrice)
+SSL = useShortStopLoss and TradeDir == "SHORT" and (math.max(open,close,high) > shortStopLossPrice) 
+
+

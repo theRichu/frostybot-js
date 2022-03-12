@@ -1,0 +1,102 @@
+//@version=5
+strategy('SSL Channel Cross', overlay=true)
+
+// TIME WINDOW ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+startYear = input.int(title="Start Year", defval=2022, minval=1800, maxval=2100, group="Date Limits")
+startMonth = input.int(title="Start Month",defval=2, minval=1, maxval=12, group="Date Limits")
+startDate = input.int(title="Start Date", defval=1, minval=1, maxval=31, group="Date Limits")
+startHour = input.int(title="Start Hour", defval=0, minval=0, maxval=23, group="Date Limits")
+startMinute = input.int(title="Start Minute", defval=0, minval=0, maxval=59, group="Date Limits")
+
+endYear = input.int(title="End Year", defval=2025, minval=1800, maxval=2100, group="Date Limits")
+endMonth = input.int(title="End Month", defval=7, minval=1, maxval=12, group="Date Limits")
+endDate = input.int(title="End Date", defval=1, minval=1, maxval=31, group="Date Limits")
+
+// Look if the close time of the current bar
+// falls inside the date range
+
+start = timestamp('Asia/Seoul', startYear, startMonth, startDate, startHour, startMinute)
+end = timestamp('Asia/Seoul', endYear, endMonth, endDate, 0, 0)
+isInRange() => (time >= start) and (time < end)
+
+
+period = input.int(title='Period', defval=6)
+len = input.int(title='Length', defval=14)
+smaHigh = ta.sma(high, len)
+smaLow = ta.sma(low, len)
+Hlv = 0
+Hlv := close > smaHigh ? 1 : close < smaLow ? -1 : Hlv[1]
+sslDown = Hlv < 0 ? smaHigh : smaLow
+sslUp = Hlv < 0 ? smaLow : smaHigh
+
+plot(sslDown, linewidth=2, color=color.new(color.red, 0))
+plot(sslUp, linewidth=2, color=color.new(color.lime, 0))
+
+longCondition = ta.crossover(sslUp, sslDown)
+shortCondition = ta.crossunder(sslUp, sslDown)
+
+
+additional_cmd        = ",\"botType\":\"ANN\",\"basecurrency\":\"" + syminfo.basecurrency + "\"" + ",\"currency\":\"" + syminfo.currency + "\""
+
+
+////////
+TradeDir=strategy.position_size>0?"LONG":strategy.position_size<0?"SHORT":na
+
+LuseSL = input(true,  title="Use Stop Loss", group="LONG 🠕 PROFIT & LOSS")
+LSLperc = input.float(title="Stop Loss (%)", defval=1.5, minval=0, maxval=50, step=.1, group="LONG 🠕 PROFIT & LOSS") / 100
+SuseSL = input(true,  title="Use Stop Loss", group="SHORT 🠗 PROFIT & LOSS")
+SSLperc = input.float(title="Stop Loss (%)", defval=1.4, minval=0, maxval=50, step=.1, group="SHORT 🠗 PROFIT & LOSS") / 100
+
+//LONG STOP LOSS
+LslconvertL = strategy.position_avg_price * (1 - LSLperc)
+LSL = TradeDir == "LONG" and (math.min(open,close,low) < LslconvertL) and LuseSL 
+//SHORT STOP LOSS
+SslconvertS = strategy.position_avg_price * (1 + SSLperc)
+SSL = TradeDir == "SHORT" and (math.max(open,close,high) > SslconvertS) and SuseSL 
+
+stopLossLimit = TradeDir == "LONG"?LslconvertL:TradeDir=="SHORT"?SslconvertS:na
+plot(stopLossLimit, color=color.new(TradeDir == "LONG"?color.blue:color.red,30), title="stopLossLimit", style=plot.style_stepline)
+
+var nowDangerBox = box.new(na, na, na, na, border_color=na, xloc=xloc.bar_index)
+moveDangerBox(_box) => 
+    box.set_right(_box, bar_index)
+    box.set_left(_box, strategy.opentrades.entry_bar_index(0))
+    box.set_top(_box, math.max( strategy.position_avg_price, stopLossLimit))
+    box.set_bottom(_box, math.min( strategy.position_avg_price, stopLossLimit))
+    box.set_extend(_box, extend=extend.right)
+    box.set_bgcolor(_box, color.new(color.red,90))
+
+moveDangerBox(nowDangerBox)
+
+strategy.close("Long", comment="LSL",  when=LSL)
+strategy.close("Short", comment="SSL", when=SSL)
+
+
+// strategy.close('Short', when=longCondition)
+strategy.entry('Long', strategy.long, when=longCondition and isInRange())
+// strategy.close('Long', when=shortCondition)
+strategy.entry('Short', strategy.short, when=shortCondition and isInRange())
+
+
+//ALERTS▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+
+useentryalert  = input(defval=true, title="Use ENTRY Alert", group="Custom Alert Messages")
+useexitalert   = input(defval=true, title="Use EXIT Alert", group="Custom Alert Messages")
+usestopalert   = input(defval=true, title="Use STOP Alert", group="Custom Alert Messages")
+
+
+// "market_position": "{{strategy.market_position}}", 
+// "market_position_size": "{{strategy.market_position_size}}", 
+// "position_size": "{{strategy.position_size}}",
+// "action": "{{strategy.order.action}}",
+// "contracts": "{{strategy.order.contracts}}",
+// "price": "{{strategy.order.price}}"
+if (longCondition) and useentryalert
+    alert(", \"market_position\":\"long\", \"action\":\"buy\""+ additional_cmd, alert.freq_once_per_bar)
+if (shortCondition) and useentryalert
+    alert(", \"market_position\":\"short\", \"action\":\"sell\""+ additional_cmd, alert.freq_once_per_bar)
+if LSL and usestopalert
+    alert(", \"market_position\":\"flat\", \"action\":\"sell\""+additional_cmd, alert.freq_once_per_bar)
+if SSL and usestopalert
+    alert(", \"market_position\":\"flat\", \"action\":\"buy\""+additional_cmd, alert.freq_once_per_bar)
+//END▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲

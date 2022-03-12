@@ -1,0 +1,114 @@
+//@version=4
+//@author=LucF, for PineCoders
+
+study("Conditional Averages [PineCoders]")
+
+// Averages - PineCoders FAQ
+//  v9, 2021.08.17 20:11 — LucF
+
+// PineCoders, Tools and ideas for all Pine coders.
+// This script's page on TradingView: https://www.tradingview.com/script/isSfahiX-Averages-PineCoders-FAQ/
+
+// The script demonstrates techniques to calculate conditional averages, i.e., of only values meeting certain criteria.
+// We will look at three types of conditional averages:
+//      1. Cumulative average (arithmetic mean) of values when a condition is met.
+//      2. Average of values for the last x occurrences of the condition.
+//      3. Average of values when the condition was met in the last x bars.
+// Use the Data Window to inspect the script's values!
+// You can adapt this code to average any source on your own condition.
+
+// Source values we will be averaging.
+float source = volume
+// Condition on which we want to calculate our averages.
+bool condition = close > open
+
+
+// —————————— 1. Cumulative average of values when a condition is met.
+f_avgWhen(_src, _cond) =>
+    // float _src: values to average.
+    // bool _cond: condition determining when a value must be included in the set of averaged values.
+    float _cumTotal = cum(_cond ? _src : 0)
+    float _cumCount = cum(_cond ? 1 : 0)
+    float _return = _cumTotal / _cumCount
+
+plot(f_avgWhen(source, condition), "Case 1 Average", color.new(color.silver, 70), linewidth = 10)
+
+
+// —————————— 2. The average of `_src` for the last `x` occurrences where `_cond` is true.
+x = input(20, "Case 2: Average this many last occurrences")
+f_avgWhenLast(_src, _cond, _cnt) =>
+    // float _src: values to average.
+    // bool _cond: condition determining when a value must be included in the set of averaged values.
+    // int _cnt  : quantity of last occurrences of the condition for which to average values.
+    var float[] _valuesToAverage = array.new_float(x, na)
+    if _cond
+        // Condition is met; add a value to the end of the array.
+        array.push(_valuesToAverage, _src)
+        // Remove the oldest values from the beginning of the array.
+        array.shift(_valuesToAverage)
+    // Return the average of all the values in the array, excluding `na` values.
+    float _return = array.avg(_valuesToAverage)
+
+plot(f_avgWhenLast(source, condition, x), "Case 2 Average", color.fuchsia)
+
+
+// ————— Case 3. The average of `_src` in last `_cnt` bars, but only when `_cond` is true.
+y = input(20, "Case 3: Average all occurrences in these last bars")
+f_avgWhenInLast(_src, _cond, _cnt) =>
+    // float _src: values to average.
+    // bool _cond: condition determining when a `_src` must be included in the set of averaged values.
+    // int _cnt  : quantity of bars to evaluate.
+    float _total = sum(condition ? _src : 0, _cnt)
+    float _count = sum(condition ? 1 : 0, _cnt)
+    float _return = _total / _count
+
+plot(f_avgWhenInLast(source, condition, y), " Case 3 Average", color.orange)
+
+
+
+// ——————————————————————————————————————————————————
+// ——————————— Multiple result functions ————————————
+// ——————————————————————————————————————————————————
+// Now let's say we needed the count and total that our functions use to calculate their average;
+// we'd use the possibility for a Pine function to return multiple results.
+
+
+f_avgWhenX3(_src, _cond) =>
+    // float _src: values to average.
+    // bool _cond: condition determining when a value must be included in the set of averaged values.
+    float _cumTotal = cum(_cond ? _src : 0)
+    float _cumCount = cum(_cond ? 1 : 0)
+    float _return = _cumTotal / _cumCount
+    [_return, _cumTotal, _cumCount]
+
+[average1, total1, count1] = f_avgWhenX3(source, condition)
+plotchar(na, "═════════ X3 Functions", "", location.top)
+plot(average1, " Case 1 Average", color.silver)
+plotchar(total1, "Case 1 Total", "", location.top, color.aqua)
+plotchar(count1, "Case 1 Count", "", location.top, color.aqua)
+
+
+f_avgWhenLastX3(_src, _cond, _cnt) =>
+    var float[] _valuesToAverage = array.new_float(x, na)
+    if _cond
+        array.push(_valuesToAverage, _src)
+        array.shift(_valuesToAverage)
+    float _return = array.avg(_valuesToAverage)
+    [_return, array.sum(_valuesToAverage), array.size(_valuesToAverage)]
+
+[average2, total2, count2] = f_avgWhenLastX3(source, condition, x)
+plot(average2, " Case 2 Average", color.fuchsia)
+plotchar(total2, "Case 2 Total", "", location.top, color.aqua)
+plotchar(count2, "Case 2 Count", "", location.top, color.aqua)
+
+
+f_avgWhenInLastX3(_src, _cond, _cnt) =>
+    float _total = sum(condition ? _src : 0, _cnt)
+    float _count = sum(condition ? 1 : 0, _cnt)
+    float _return = _total / _count
+    [_return, _total, _count]
+
+[average3, total3, count3] = f_avgWhenInLastX3(source, condition, y)
+plot(average3, " Case 3 Average", color.orange)
+plotchar(total3, "Case 3 Total", "", location.top, color.aqua)
+plotchar(count3, "Case 3 Count", "", location.top, color.aqua)

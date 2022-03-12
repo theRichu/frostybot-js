@@ -90,31 +90,38 @@ app.use('/frostybot', apiRouter); // WebSocket API
 app.use('/ui', guiRouter);        // GUI
 
 app.post('/webhook', async function (req, res) {
+  let command = ''
+	let cmd = ''
+	let cmd2 = ''
+  let maxsize
+  let symbol
+	let base
+	let stoptrigger
+  let stub = req.body.stub
+
   try {
     if (!req.rawBody) {
       const axios = require('axios')
-      let command = ''
-      let cmd = ''
-      let maxsize
-      let symbol
-      let base
-      let stub = req.body.stub
-
       console.log('webhook', req.body)
 
-      if (body.botType === 'ANN') {
+      const body = req.body
+			if (body.botType === 'ANN') {
         if (body.market_position === 'long' || body.market_position === 'short') {
           cmd = 'trade:' + body.stub + ':' + body.market_position + ' symbol=' + body.basecurrency + '/' + body.currency + ' maxsize=' + body.maxsize + ' base=' + body.market_position_size
           command = 'trade:' + body.market_position
           symbol = body.basecurrency + '/' + body.currency
           maxsize = body.maxsize
+					stoptrigger = body.stoploss
+					if (stoptrigger) {
+						cmd2 = 'trade:' + body.stub + ':stoploss'+ 'symbol=' + body.basecurrency + '/' + body.currency + ' stoptrigger=' + stoptrigger
+					}
           base = body.market_position_size
         } else {
           cmd = 'trade:' + body.stub + ':close symbol=' + body.basecurrency + '/' + body.currency + ' base=' + body.contracts
 
           command = 'trade:close'
           symbol = body.basecurrency + '/' + body.currency
-          base = body.market_position_size
+          base = body.contracts
         }
       } else {
         // 기존봇
@@ -139,11 +146,19 @@ app.post('/webhook', async function (req, res) {
         console.log({ cmd, stub, command, symbol, maxsize, base, })
         var url = await global.frostybot._modules_['core'].url();
         // Create new request for the signal processing
-        axios.post(url + '/frostybot', { command, symbol, maxsize, base, stub })
-      }
+        await axios.post(url + '/frostybot', { command, symbol, maxsize, base, stub })
+			}
+			if (cmd2) {
+				console.log({ cmd2, stub, command, symbol, maxsize, base, })
+				var url = await global.frostybot._modules_['core'].url();
+				await axios.post(url + '/frostybot', { command: 'trade:stoploss', symbol, stub, stoptrigger })
+			}
     }
+    res.status(200).send({
+      cmd, stub, command, symbol, maxsize, base
+    });
   } catch (error) {
-    console.error(error)
+    res.status(500).send(error.message);
   }
 })
 // Redirect to the GUI

@@ -1,0 +1,14 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © therichu
+
+//@version=5
+indicator("변동성 필터", overlay = false)
+
+trueRangeLength = input.int(14,"TrueRangeLength")
+
+volatilityBreak(volmin, volmax) =>
+    ta.atr(volmin) > ta.atr(volmax)
+
+
+plot(ta.atr(1), color=volatilityBreak(1, trueRangeLength)?color.blue:color.gray, style=plot.style_columns)
+plot(ta.atr(trueRangeLength))

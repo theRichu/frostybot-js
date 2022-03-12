@@ -1,0 +1,17 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © therichu
+
+//@version=5
+indicator("볼륨 필터", overlay = false)
+
+volumeRSILength = input.int(14,"VolumeRSILength")
+volumeRSIHMALength = input.int(10,"volumeRSIHMALength")
+volumeThreshold = input.int(52,"VolumeFilterThreshold")
+
+volumeBreak(thres) =>
+    rsivol = ta.rsi(volume, volumeRSILength)
+    osc = ta.hma(rsivol, volumeRSIHMALength)
+    osc > thres
+    
+plot(ta.hma(ta.rsi(volume, 14), 10), color=volumeBreak(volumeThreshold)?color.blue:color.gray, style=plot.style_columns)
+hline(volumeThreshold)

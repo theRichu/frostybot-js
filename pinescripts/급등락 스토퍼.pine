@@ -1,0 +1,48 @@
+// 급등락 스토퍼! ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+// 현재 손실중인가..?
+isBleeding = (TradeDir == "HOLD")?false:(TradeDir == "LONG" ? strategy.position_avg_price > close : 	strategy.position_avg_price < close)
+bgcolor(isBleeding? color.new(color.red, 95) : na)
+
+recentNum = input.int(title='Recent Bars', defval=28)
+surpriseThreshold = input.float(title='Surprise Threshold', defval=1.2, minval=0, maxval=50, step=.01)
+surpriseThresholdNormalized = 1 + (surpriseThreshold / 100)
+entryPrice = strategy.position_avg_price
+
+f_avgUpDownPercent(_src, _cond, _cnt) =>
+    float _sumPositive = math.sum(_cond ? _src : 0, _cnt)
+    float _sumNegative = math.sum(_cond ? 0 : _src, _cnt)
+    float _countPositive = math.sum(_cond ? 1 : 0, _cnt)
+    float _countNegative = math.sum(_cond ? 0 : 1, _cnt)
+    float _returnPositive = _sumPositive / _countPositive
+    float _returnNegative = _sumNegative / _countNegative
+    [_returnPositive, _returnNegative]
+
+barPercent = (barstate.isrealtime)?((close-open)/open)*100:((high-low)/open)*100
+bool surpriseCondition = close > open
+
+
+[avgUpPercent, avgDownPercent] = f_avgUpDownPercent(barPercent, surpriseCondition, recentNum)
+
+
+limitDownPercent = (avgDownPercent * (surpriseThresholdNormalized))/100
+limitUpPercent = (avgUpPercent * (surpriseThresholdNormalized))/100
+
+emergencyStopLongSignal = false
+emergencyStopShortSignal = false
+
+stopLossSurpriseLimit = open * (1 + (TradeDir == "LONG" ? limitDownPercent : limitUpPercent))
+
+var surpriseBox = box.new(na, na, na, na, border_color=color.fuchsia, xloc=xloc.bar_index, bgcolor=na)
+moveSurpriseBox(_box) => 
+    box.set_right(_box, isBleeding?bar_index+1:na)
+    box.set_left(_box, isBleeding?bar_index:na)
+    box.set_top(_box, isBleeding?math.max(open, stopLossSurpriseLimit):na)
+    box.set_bottom(_box, isBleeding?math.min(open, stopLossSurpriseLimit):na)
+
+moveSurpriseBox(surpriseBox)
+
+if(isBleeding)
+    if(TradeDir == "LONG") 
+	    emergencyStopLongSignal := barPercent < limitDownPercent
+	else if(TradeDir == "SHORT") 
+	    emergencyStopShortSignal := barPercent > limitUpPercent
