@@ -1,0 +1,28 @@
+전략 설명
+
+ Trend indicator A-V2 
+ EMA length 52
+ EMA length (smoothing) 10
+
+ SuperTrend
+ ATR 9
+ ATR Multiplier 3.9
+
+ QQE 그대로
+
+Long Entry
+  1.QQE Mod Blue
+  2.A-V2 Green
+  3.SuperTrend Buy Signal
+
+Long Exit
+  시작가 - A-V2 위치 반대로 2배 (1:2)
+
+Short Entry
+  1.QQE Mod Red
+  2.A-V2 Red
+  3.SuperTrend Sell Signal
+
+
+Short Exit
+  시작가 - A-V2 위치 반대로 2배 (1:2)

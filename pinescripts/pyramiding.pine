@@ -1,0 +1,30 @@
+
+//Order Placing
+    
+strategy.entry("Entry 1", strategy.long, when = (strategy.opentrades == 0) and longsignal)
+    
+strategy.entry("Entry 2", strategy.long, when = (strategy.opentrades == 1) and longsignal)
+        
+strategy.entry("Entry 3", strategy.long, when = (strategy.opentrades == 2) and longsignal)
+    
+strategy.entry("Entry 4", strategy.long, when = (strategy.opentrades == 3) and longsignal)
+    
+strategy.entry("Entry 5", strategy.long, when = (strategy.opentrades == 4) and longsignal)
+        
+strategy.entry("Entry 6", strategy.long, when = (strategy.opentrades == 5) and longsignal)
+        
+strategy.entry("Entry 7", strategy.long, when = (strategy.opentrades == 6) and longsignal)
+    
+    
+    
+if (strategy.position_size > 0)
+    strategy.exit(id="Exit 1", from_entry = "Entry 1", profit = Profit_Ticks, loss = Loss_Ticks)
+    strategy.exit(id="Exit 2", from_entry = "Entry 2", profit = Profit_Ticks, loss = Loss_Ticks)
+    strategy.exit(id="Exit 3", from_entry = "Entry 3", profit = Profit_Ticks, loss = Loss_Ticks)
+    strategy.exit(id="Exit 4", from_entry = "Entry 4", profit = Profit_Ticks, loss = Loss_Ticks)
+    strategy.exit(id="Exit 5", from_entry = "Entry 5", profit = Profit_Ticks, loss = Loss_Ticks)
+    strategy.exit(id="Exit 6", from_entry = "Entry 6", profit = Profit_Ticks, loss = Loss_Ticks)
+    strategy.exit(id="Exit 7", from_entry = "Entry 7", profit = Profit_Ticks, loss = Loss_Ticks)
+
+
+// 피라미딩 번호들마다 비율을 지정해놓는다면.. 괜찮을듯!

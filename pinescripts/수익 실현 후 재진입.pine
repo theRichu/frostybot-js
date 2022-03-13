@@ -1,0 +1,316 @@
+//@version=5
+strategy("TP and RE", overlay=true, calc_on_every_tick=true, currency='USD', initial_capital=1000, default_qty_type=strategy.percent_of_equity, default_qty_value=90)
+
+// 날짜 제한
+// Make input options that configure backtest date range
+startYear = input.int(title="Start Year", defval=2022, minval=1800, maxval=2100, group="Date Limits")
+startMonth = input.int(title="Start Month",defval=3, minval=1, maxval=12, group="Date Limits")
+startDate = input.int(title="Start Date", defval=13, minval=1, maxval=31, group="Date Limits")
+startHour = input.int(title="Start Hour", defval=14, minval=0, maxval=23, group="Date Limits")
+startMinute = input.int(title="Start Minute", defval=0, minval=0, maxval=59, group="Date Limits")
+
+endYear = input.int(title="End Year", defval=2030, minval=1800, maxval=2100, group="Date Limits")
+endMonth = input.int(title="End Month", defval=7, minval=1, maxval=12, group="Date Limits")
+endDate = input.int(title="End Date", defval=1, minval=1, maxval=31, group="Date Limits")
+
+start = timestamp('Asia/Seoul', startYear, startMonth, startDate, startHour, startMinute)
+end = timestamp('Asia/Seoul', endYear, endMonth, endDate, 0, 0)
+IsInRange() => (time >= start) and (time < end)
+
+// Strategy Simulation
+varip float positionSize = 0
+varip float positionPrice = 0
+plot(positionPrice, color=color.new(positionSize > 0 ?color.aqua:color.maroon,50), title="positionPrice", style=plot.style_stepline, linewidth=2)
+
+
+bgcolor(IsInRange() and positionSize == 0 ? color.new(color.gray, 95) : na)
+// bgcolor(IsInRange() and positionSize > 0 ? color.new(color.blue, 95) : na)
+// bgcolor(IsInRange() and positionSize < 0 ? color.new(color.red, 95) : na)
+
+plotchar(positionSize, "positionSize", "", location.top, size = size.tiny)
+plotchar(positionPrice, "positionPrice", "", location.top, size = size.tiny)
+
+
+EntryLong (msg) =>
+    alert('LONG ENTRY' + msg , alert.freq_all)
+    strategy.entry("Long", strategy.long)
+
+EntryShort (msg) =>
+    alert('SHORT ENTRY' + msg , alert.freq_all)
+    strategy.entry("Short", strategy.short)
+
+ExitLong (msg) =>
+    alert('LONG STOP LOSS' + msg , alert.freq_all)
+    strategy.close("Long", comment=msg)
+
+ExitShort (msg) =>
+    alert('SHORT STOP LOSS' + msg , alert.freq_all)
+    strategy.close("Short", comment=msg)
+
+
+
+// # ========================================================================= #
+// #  로직 구간  (롱, 숏 시그널 로직)                      
+// # ========================================================================= #
+
+varip longSignal = false
+varip shortSignal = false
+
+
+context = "0"
+if(IsInRange())
+    context := switch context[1]
+        "0" => "1"
+        "1" => "2"
+        
+switch context
+    "1" => longSignal := true
+    
+
+// 변동성 필터
+useVolatilityFilter = input.bool(true,"Use Volatility Filter", group="Signal Filter Volatility")
+trueRangeLength = input.int(14,"TrueRangeLength", group="Signal Filter Volatility")
+
+volatilityBreak(volmin, volmax) =>
+    ta.atr(volmin) > ta.atr(volmax)
+
+volatilityFilterSignal = useVolatilityFilter?volatilityBreak(1, trueRangeLength):true
+
+// 볼륨 필터
+useVolumeFilter = input.bool(true,"Use Volume Filter", group="Signal Filter Volume")
+
+volumeRSILength = input.int(14,"VolumeRSILength", group="Signal Filter Volume")
+volumeRSIHMALength = input.int(10,"volumeRSIHMALength", group="Signal Filter Volume")
+volumeThreshold = input.int(52,"VolumeFilterThreshold", group="Signal Filter Volume")
+
+volumeBreak(thres) =>
+    rsivol = ta.rsi(volume, volumeRSILength)
+    osc = ta.hma(rsivol, volumeRSIHMALength)
+    osc > thres
+
+volumeFilterSignal = useVolumeFilter?volumeBreak(volumeThreshold):true
+
+
+// 필요하다면, 시그널에 필터 추가!
+// # ========================================================================= #
+
+
+// 여기서 롱, 숏 진입
+plotshape(longSignal, title="longSignal", text="lEntry", location=location.belowbar, style=shape.arrowup, size=size.tiny, color=color.blue, textcolor=color.white)
+plotshape(shortSignal, title="shortSignal", text="sEntry", location=location.abovebar, style=shape.arrowdown, size=size.tiny, color=color.red, textcolor=color.white)
+
+if(longSignal and positionSize == 0)
+    positionSize := positionSize + 1.0
+    longSignal := false
+    positionPrice := close
+    EntryLong('')
+else if(shortSignal and positionSize == 0)
+    positionSize := positionSize-1.0
+    shortSignal := false
+    positionPrice := close
+    EntryShort('')
+
+// # ========================================================================= #
+
+
+// 여기서 스톱로스 - 손절
+// STOP LOSS ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+// StopLoss Input
+useLongStopLoss = input(true,  title="Use Long Stop Loss", group="STOPLOSS")
+longStopLossPercent = input.float(title="Long Stop Loss (%)", defval=2.5, minval=0, maxval=50, step=.1, group="STOPLOSS") / 100
+useShortStopLoss = input(true,  title="Use Short Stop Loss", group="STOPLOSS")
+shortStopLossPercent = input.float(title="Short Stop Loss (%)", defval=2.5, minval=0, maxval=50, step=.1, group="STOPLOSS") / 100
+useChasing = input(false,  title="Use Chasing", group="STOPLOSS")
+
+// StopLoss Logic
+
+longStopLossPrice = positionSize > 0 ? positionPrice * (1 - longStopLossPercent) : na
+shortStopLossPrice =positionSize < 0 ? positionPrice * (1 + shortStopLossPercent) : na
+
+stopLossLimitPrice = positionSize > 0  ? longStopLossPrice : positionSize < 0 ? shortStopLossPrice : na
+
+plot(stopLossLimitPrice, color=color.new(positionSize > 0 ?color.blue:color.red,30), title="stopLossLimitPrice", style=plot.style_stepline)
+
+var int positionSince = 0
+if(positionSize != 0)
+    positionSince := positionSince + 1
+else
+    positionSince := 0
+    
+    
+plotchar(positionSince, "positionSince", "", location.top, size = size.tiny)
+
+// StopLoss Plotting
+var nowDangerBox = box.new(na, na, na, na, border_color=na, xloc=xloc.bar_index)
+MoveDangerBox(_box) => 
+    box.set_right(_box, positionSize == 0 ? na : bar_index)
+    box.set_left(_box, positionSize == 0 ? na : bar_index-positionSince+1)
+    box.set_top(_box, math.max(positionPrice, stopLossLimitPrice))
+    box.set_bottom(_box, math.min(positionPrice, stopLossLimitPrice))
+    box.set_extend(_box, extend=extend.right)
+    box.set_bgcolor(_box, color.new(color.fuchsia,90))
+
+
+MoveDangerBox(nowDangerBox)
+
+
+// StopLoss Signal
+longStopLossSignal = useLongStopLoss and (close < longStopLossPrice)
+shortStopLossSignal = useShortStopLoss and (close > shortStopLossPrice) 
+longChasingSignal = false
+shortChasingSignal = false
+
+plotshape(longStopLossSignal, title="longStopLossSignal", text="lSL", location=location.belowbar, style=shape.xcross, size=size.tiny, color=color.red, textcolor=color.red)
+plotshape(shortStopLossSignal, title="shortStopLossSignal", text="sSL", location=location.abovebar, style=shape.xcross, size=size.tiny, color=color.red, textcolor=color.red)
+
+if(longStopLossSignal and positionSize > 0)
+    positionSize := 0 
+    positionPrice := na
+    longStopLossSignal := false
+    ExitLong('lSL')
+    if(useChasing)
+        shortChasingSignal := true
+else if(shortStopLossSignal and positionSize < 0)
+    positionSize := 0 
+    positionPrice := na
+    shortStopLossSignal := false
+    ExitShort('sSL')
+    if(useChasing)
+        longChasingSignal := true
+
+
+if(longChasingSignal and positionSize == 0)
+    positionSize := positionSize + 1 
+    positionPrice := close
+    EntryLong('lC')
+else if(shortChasingSignal and positionSize == 0)
+    positionSize := positionSize - 1
+    positionPrice := close
+    EntryShort('sC')
+
+// # ========================================================================= #
+
+    
+// 급등락 스토퍼! ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+// 현재 손실중인가..?
+useEmergencyStop = input(true,  title="use Emergency Stop", group="STOPLOSS")
+recentNum = input.int(title='Watching Bars', defval=28, group="STOPLOSS")
+surpriseThreshold = input.float(title='Surprise Threshold', defval=10, minval=0, maxval=50, step=.01, group="STOPLOSS")
+
+isBleeding = useEmergencyStop ? (positionSize == 0 ? false : (positionSize > 0 ? positionPrice > close : positionPrice < close)) : false
+bgcolor(useEmergencyStop and isBleeding? color.new(color.fuchsia, 60) : na)
+
+surpriseThresholdNormalized = 1 + (surpriseThreshold / 100)
+
+f_avgUpDownPercent(_src, _cond, _cnt) =>
+    float _sumPositive = math.sum(_cond ? _src : 0, _cnt)
+    float _sumNegative = math.sum(_cond ? 0 : _src, _cnt)
+    float _countPositive = math.sum(_cond ? 1 : 0, _cnt)
+    float _countNegative = math.sum(_cond ? 0 : 1, _cnt)
+    float _returnPositive = _sumPositive / _countPositive
+    float _returnNegative = _sumNegative / _countNegative
+    [_returnPositive, _returnNegative]
+
+barPercent = (barstate.isrealtime) ? ((close-open)/open)*100 : ((high-low)/open)*100
+bool surpriseCondition = close > open
+
+
+[avgUpPercent, avgDownPercent] = f_avgUpDownPercent(barPercent, surpriseCondition, recentNum)
+
+limitDownPercent = (avgDownPercent * (surpriseThresholdNormalized))/100
+limitUpPercent = (avgUpPercent * (surpriseThresholdNormalized))/100
+
+emergencyStopLongSignal = false
+emergencyStopShortSignal = false
+
+stopLossSurpriseLimit = open * (1 + (positionSize > 0 ? limitDownPercent : limitUpPercent))
+
+var surpriseBox = box.new(na, na, na, na, border_color=color.fuchsia, xloc=xloc.bar_index, bgcolor=na)
+moveSurpriseBox(_box) => 
+    box.set_right(_box, isBleeding?bar_index+1:na)
+    box.set_left(_box, isBleeding?bar_index:na)
+    box.set_top(_box, isBleeding?math.max(open, stopLossSurpriseLimit):na)
+    box.set_bottom(_box, isBleeding?math.min(open, stopLossSurpriseLimit):na)
+
+moveSurpriseBox(surpriseBox)
+
+if(isBleeding and useEmergencyStop)
+    if(positionSize > 0) 
+	    emergencyStopLongSignal := barPercent < limitDownPercent
+	else if(positionSize < 0) 
+	    emergencyStopShortSignal := barPercent > limitUpPercent
+
+
+plotshape(emergencyStopLongSignal, title="emergencyStopLongSignal", text="lESL", location=location.belowbar, style=shape.cross, size=size.tiny, color=color.red, textcolor=color.red)
+plotshape(emergencyStopLongSignal, title="emergencyStopLongSignal", text="sESL", location=location.abovebar, style=shape.cross, size=size.tiny, color=color.red, textcolor=color.red)
+
+
+if(emergencyStopLongSignal and positionSize > 0)
+    positionSize := 0 
+    positionPrice := na
+    emergencyStopLongSignal := false
+    ExitLong('lE')
+else if(emergencyStopShortSignal and positionSize < 0)
+    positionSize := 0 
+    positionPrice := na
+    emergencyStopShortSignal := false
+    ExitShort('sE')
+    
+// # ========================================================================= #
+
+// 여기서 수익실현
+// TAKE PROFIT ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+useLongTakeProfit = input(true,  title="Use Long Position Take Profit", group="PROFIT")
+longTakeProfitPercent = input.float(title="Long Position Take Profit (%)", defval=5, minval=0, maxval=1000, step=.1, group="PROFIT & LOSS") / 100
+useShortTakeProfit = input(true,  title="Use Short Position Take Profit", group="PROFIT")
+shortTakeProfitPercent = input.float(title="Short Position Take Profit (%)", defval=5, minval=0, maxval=1000, step=.1, group="PROFIT & LOSS") / 100
+
+// Re-entry 수익실현 후 재진입
+useRE = input(true,  title="Use Re-Entry", group="PROFIT")
+longReEntrySignal = false
+shortReEntrySignal = false
+
+longTakeProfitThresholdPrice = positionSize > 0 ? positionPrice * (1 + longTakeProfitPercent) : na
+shortTakeProfitThresholdPrice = positionSize < 0 ? positionPrice * (1 - shortTakeProfitPercent) : na
+
+longTakeProfitSignal = (longTakeProfitThresholdPrice < close) and useLongTakeProfit
+shortTakeProfitSignal = (shortTakeProfitThresholdPrice > close) and useShortTakeProfit
+
+takeProfitThresholdPrice = positionSize > 0  ? longTakeProfitThresholdPrice: positionSize < 0 ? shortTakeProfitThresholdPrice : na
+
+plot(takeProfitThresholdPrice, color=color.new(positionSize > 0 ?color.green:color.green,30), title="takeProfitThresholdPrice", style=plot.style_stepline)
+
+plotshape(longTakeProfitSignal, title="longTakeProfitSignal", text="lTP", location=location.abovebar, style=shape.diamond, size=size.tiny, color=color.blue, textcolor=color.blue)
+plotshape(shortTakeProfitSignal, title="shortTakeProfitSignal", text="sTP", location=location.belowbar, style=shape.diamond, size=size.tiny, color=color.blue, textcolor=color.blue)
+
+
+if(longTakeProfitSignal and positionSize > 0)
+    positionSize := 0 
+    positionPrice := na
+    longTakeProfitSignal := false
+    ExitLong('lTP')
+    if (useRE)
+        longReEntrySignal := true
+else if(shortTakeProfitSignal and positionSize < 0)
+    positionSize := 0 
+    positionPrice := na
+    shortTakeProfitSignal := false
+    ExitShort('sTP')
+    if (useRE)
+        longReEntrySignal := true
+
+plotshape(longReEntrySignal, title="longReEntrySignal", text="lRE", location=location.belowbar, style=shape.triangleup, size=size.tiny, color=color.blue, textcolor=color.blue)
+plotshape(shortReEntrySignal, title="shortReEntrySignal", text="sRE", location=location.abovebar, style=shape.triangledown, size=size.tiny, color=color.red, textcolor=color.red)
+
+if(longReEntrySignal and positionSize == 0)
+    positionSize := positionSize + 1 
+    positionPrice := close
+    longReEntrySignal := false
+    EntryLong('lRE')
+else if(shortReEntrySignal and positionSize == 0)
+    positionSize := positionSize - 1
+    positionPrice := close
+    shortReEntrySignal := false
+    EntryShort('sRE')
+
+// # ========================================================================= #
